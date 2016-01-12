@@ -3,14 +3,16 @@ import matplotlib.pyplot as plt
 
 class YUV_frame:
     """ YUV frame 한장 """
-    def __init__(self, w,h,d):
+    def __init__(self, w, h, d):
         self.width = w
         self.height = h
         self.bitdepth = d
     def read_frame(self, fp):
-        Y = fp.read(w*h*step)
-        U = fp.read(w*h*step//4)
-        V = fp.read(w*h*step//4)
+        size = self.width * self.height
+        step = 1 if self.bitdepth == 8 else 2
+        Y = fp.read(size * step)
+        U = fp.read(size * step//4)
+        V = fp.read(size * step//4)
         if self.bitdepth == 8:
             Y = np.fromstring(Y, dtype='uint8').astype('uint64')
             U = np.fromstring(U, dtype='uint8').astype('uint64')
@@ -19,9 +21,9 @@ class YUV_frame:
             Y = np.fromstring(Y, dtype='uint16').astype('uint64')
             U = np.fromstring(U, dtype='uint16').astype('uint64')
             V = np.fromstring(V, dtype='uint16').astype('uint64')
-        self.Y = np.reshape(Y,(self.height,self.width))
-        self.U = np.reshape(U,(self.height,self.width))
-        self.V = np.reshape(V,(self.height,self.width))
+        self.Y = np.reshape(Y,(self.height, self.width))
+        self.U = np.reshape(U,(self.height, self.width))
+        self.V = np.reshape(V,(self.height, self.width))
 
 class YUV_sequence:
     """ YUV sequences """
@@ -55,7 +57,7 @@ class YUV_sequence:
             con.commit()
             re = csr.fetchall()
         except sqlite3.OperationalError:
-            self.createDB('filenames')
+            self.createDB()
             re = 0
         if re:
             # update
@@ -69,7 +71,7 @@ class YUV_sequence:
             'bit_depth'        : bitdepth,
             }
             # insert
-            query = "INSERT INTO {0} ({1}) VALUES {2};".format(DB_name, ', '.join(query_data.keys()), tuple(query_data.values()))
+            query = "INSERT INTO {0} ({1}) VALUES {2};".format('filenames', ', '.join(query_data.keys()), tuple(query_data.values()))
         csr.execute(query)
         con.commit()
         con.close()
@@ -84,19 +86,22 @@ class YUV_sequence:
             h = int(h)
             f = int(f)
             d = 10 if d == '_10bit' else 8
-            return [seq,w,h,f,d]
+            return [w,h,f,d]
         else: # query database
+            #TODO: completete it
             import sqlite3
             conn = sqlite3.connect('fileopenlog.db')
-        step = 1 if d == 8 else 2
+        return [1920, 1080,24,8]
 
     def open_file(filename, width, height, fps, bpp = 8):
         #read file
         self.data = []
+        cnt = 0
         with open(obj, 'rb') as f:
             while True:
                 t = YUV_frame(width, height, bpp)
                 t.read()
                 self.data.append(t)
+        return len(self.data)
     def getFrame(FrameNum):
         return self.data[FrameNum]
