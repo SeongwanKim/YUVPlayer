@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
 
 class YUV_frame:
     """ YUV frame 한장 """
@@ -13,17 +14,46 @@ class YUV_frame:
         Y = fp.read(size * step)
         U = fp.read(size * step//4)
         V = fp.read(size * step//4)
+        if len(Y) == 0:
+            return 0
         if self.bitdepth == 8:
-            Y = np.fromstring(Y, dtype='uint8').astype('uint64')
-            U = np.fromstring(U, dtype='uint8').astype('uint64')
-            V = np.fromstring(V, dtype='uint8').astype('uint64')
+            Y = np.fromstring(Y, dtype='uint8').astype('uint16')
+            U = np.fromstring(U, dtype='uint8').astype('uint16')
+            V = np.fromstring(V, dtype='uint8').astype('uint16')
         else:
-            Y = np.fromstring(Y, dtype='uint16').astype('uint64')
-            U = np.fromstring(U, dtype='uint16').astype('uint64')
-            V = np.fromstring(V, dtype='uint16').astype('uint64')
+            Y = np.fromstring(Y, dtype='uint16')
+            U = np.fromstring(U, dtype='uint16')
+            V = np.fromstring(V, dtype='uint16')
         self.Y = np.reshape(Y,(self.height, self.width))
-        self.U = np.reshape(U,(self.height, self.width))
-        self.V = np.reshape(V,(self.height, self.width))
+        self.U = np.reshape(U,(self.height//2, self.width//2))
+        self.V = np.reshape(V,(self.height//2, self.width//2))
+        return len(Y)
+
+    def GetImg(self, channel, width, height):
+        import scipy.ndimage
+        div = 2**(self.bitdepth-8)
+        ret = np.zeros((height, width, 3), 'uint8')+128
+        ratio = min(width/self.width, height/self.height)
+        dst_width = ratio * self.width
+        dst_height = ratio * self.height
+        dst_x = (width - dst_width) // 2
+        dst_y = (height - dst_height) // 2
+        dst_width += dst_x
+        dst_height += dst_y
+
+        if channel == 'Y':
+            ret[dst_y:dst_height,dst_x:dst_width,0] = cv2.resize((self.Y // div), (0,0), fx=ratio, fy=ratio)
+        elif channel == 'U':
+            ret[dst_y:dst_height,dst_x:dst_width,0] = cv2.resize((self.U // div), (0,0), fx=ratio*2, fy=ratio*2)
+        elif channel == 'V':
+            ret[dst_y:dst_height,dst_x:dst_width,0] = cv2.resize((self.V // div), (0,0), fx=ratio*2, fy=ratio*2)
+        else:
+            ret[dst_y:dst_height,dst_x:dst_width,0] = cv2.resize((self.Y // div), (0,0), fx=ratio, fy=ratio)
+            ret[dst_y:dst_height,dst_x:dst_width,1] = cv2.resize((self.U // div), (0,0), fx=ratio*2, fy=ratio*2)
+            ret[dst_y:dst_height,dst_x:dst_width,2] = cv2.resize((self.V // div), (0,0), fx=ratio*2, fy=ratio*2)
+
+        ret = cv2.cvtColor(ret,cv2.COLOR_YUV2BGR)
+        return ret
 
 class YUV_sequence:
     """ YUV sequences """
@@ -76,7 +106,8 @@ class YUV_sequence:
         con.commit()
         con.close()
 
-    def get_seq_params(filename):
+    def get_seq_params(self, filename):
+        import re
         # if known format ([a-zA-Z0-9]+)_[width]x[height]_[framerate]_[bitdepth]_[a-zA-Z].yuv
         pattern ='([a-zA-Z0-9]+)_(\d+)[x](\d+)_(\d{2})(_10bit)?'
         m = re.search(pattern, filename)
@@ -93,15 +124,17 @@ class YUV_sequence:
             conn = sqlite3.connect('fileopenlog.db')
         return [1920, 1080,24,8]
 
-    def open_file(filename, width, height, fps, bpp = 8):
+    def open_file(self, filename, width, height, fps, bpp = 8):
         #read file
         self.data = []
         cnt = 0
-        with open(obj, 'rb') as f:
+        with open(filename, 'rb') as f:
             while True:
                 t = YUV_frame(width, height, bpp)
-                t.read()
+                ret_len = t.read_frame(f)
+                if ret_len == 0:
+                    break
                 self.data.append(t)
         return len(self.data)
-    def getFrame(FrameNum):
+    def getFrame(self, FrameNum):
         return self.data[FrameNum]
